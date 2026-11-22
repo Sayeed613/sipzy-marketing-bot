@@ -1,0 +1,74 @@
+/* SIPZY Marketing Bot — Global Design System (Tailwind v4) */
+
+@import 'tailwindcss';
+
+@theme {
+  /* Brand palette: forest green + warm cream */
+  --color-sipzy-green: #16653f;
+  --color-sipzy-green-hover: #114e30;
+  --color-sipzy-green-light: #22a06b;
+  --color-sipzy-cream: #faf6ec;
+  --color-sipzy-cream-dark: #f2ebda;
+  --color-sipzy-cream-border: #e6dbc4;
+  --color-sipzy-orange: #dd6b20;
+  --color-sipzy-orange-hover: #c05621;
+
+  /* Neutral text + surfaces */
+  --color-sipzy-text: #22301f;
+  --color-sipzy-muted: #6f7a6c;
+  --color-sipzy-border: #e4ded1;
+  --color-sipzy-hover: #f5f0e4;
+  --color-sipzy-overlay: rgb(20 32 22 / 0.45);
+
+  /* Status accents */
+  --color-sipzy-blue: #2563eb;
+  --color-sipzy-purple: #7c3aed;
+  --color-sipzy-teal: #0d9488;
+  --color-sipzy-indigo: #4f46e5;
+  --color-sipzy-amber: #b45309;
+  --color-sipzy-success: #15803d;
+  --color-sipzy-red: #dc2626;
+  --color-sipzy-gray: #6b7280;
+
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color-scheme: light;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-sipzy-cream);
+    color: var(--color-sipzy-text);
+    font-family: var(--font-sans);
+  }
+
+  ::selection {
+    background-color: var(--color-sipzy-green);
+    color: #fff;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-sipzy-green);
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-sipzy-cream);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-sipzy-cream-border);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-sipzy-muted);
+  }
+}

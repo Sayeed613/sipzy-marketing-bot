@@ -1,0 +1,36 @@
+{
+  "name": "sipzy-marketing-bot",
+  "version": "0.1.0",
+  "description": "AI-powered WhatsApp sales and enquiry management for SIPZY",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test src/server/tests/*.test.js",
+    "dev": "concurrently -k -n client,server \"npm:client\" \"npm:server\"",
+    "client": "vite",
+    "server": "node src/server/index.js",
+    "build": "vite build",
+    "preview": "vite preview",
+    "db:init": "node src/server/db/init.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "server": "./src/server/index.js",
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "@vitejs/plugin-react": "^6.3.0",
+    "concurrently": "^10.0.7",
+    "tailwindcss": "^4.3.5",
+    "vite": "^8.3.8"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.2.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.6"
+  }
+}
