@@ -11,9 +11,10 @@ process.env.GOOGLE_PLACES_API_KEY = 'test-key-not-real';
 const { initDb, closeDb, getDb } = await import('../db/index.js');
 initDb();
 
-const { getGooglePlacesConfig, validateSearchInput, searchGooglePlaces, GooglePlacesError } =
+const { getGooglePlacesConfig, validateSearchInput, searchGooglePlaces, saveGooglePlaceAsLead, GooglePlacesError } =
   await import('../services/googlePlaces.js');
-const { createLead } = await import('../services/leads.js');
+const { createLead, updateLead } = await import('../services/leads.js');
+const { listOutreachReadyLeads, checkLeadOutreach } = await import('../services/outreach.js');
 const { registerOptOut } = await import('../services/suppressions.js');
 
 const originalFetch = global.fetch;
@@ -188,4 +189,116 @@ test('results are flagged when they match existing leads or suppressions', async
   assert.ok(matched.crm_matches.suppression_ids.length >= 1);
   assert.deepEqual(clean.crm_matches.existing_lead_ids, []);
   assert.equal(clean.crm_matches.suppressed, false);
+});
+
+test('area is included in the Google search query', async () => {
+  let sentBody = null;
+  fetchMock = async (_url, init) => {
+    sentBody = JSON.parse(init.body);
+    return mockResponse(200, { places: [] });
+  };
+
+  const result = await searchGooglePlaces({
+    city: 'Bengaluru',
+    area: 'Indiranagar',
+    category: 'Cafés',
+  });
+
+  assert.equal(sentBody.textQuery, 'cafes in Indiranagar, Bengaluru');
+  assert.equal(result.query.area, 'Indiranagar');
+});
+
+test('saving a reviewed place creates an unverified google_places lead', async () => {
+  const result = await saveGooglePlaceAsLead({
+    place_id: 'places/save-me-1',
+    decision: 'save',
+    business_name: 'Saved Cafe',
+    city: 'Bengaluru',
+    address: 'Indiranagar, Bengaluru',
+    category: 'Cafés',
+  });
+
+  assert.equal(result.saved, true);
+  assert.equal(result.created, true);
+  assert.equal(result.duplicate, false);
+  assert.equal(result.lead.lead_source, 'google_places');
+  assert.equal(result.lead.verification_status, 'unverified');
+  assert.equal(result.lead.place_id, 'places/save-me-1');
+  assert.equal(result.lead.approved_for_outreach, 0);
+  assert.equal(result.lead.quality_outreach_ready, false);
+});
+
+test('saving the same place again is a duplicate and does not create a lead', async () => {
+  const first = await saveGooglePlaceAsLead({
+    place_id: 'places/save-me-2',
+    decision: 'save',
+    business_name: 'Duplicate Place Cafe',
+    city: 'Bengaluru',
+  });
+  const second = await saveGooglePlaceAsLead({
+    place_id: 'places/save-me-2',
+    decision: 'save',
+    business_name: 'Duplicate Place Cafe',
+    city: 'Bengaluru',
+  });
+
+  assert.equal(first.created, true);
+  assert.equal(second.created, false);
+  assert.equal(second.duplicate, true);
+  assert.equal(second.lead.id, first.lead.id);
+});
+
+test('saving by phone or name+city also dedupes', async () => {
+  const existing = createLead({
+    business_name: 'Phone Match Bakery',
+    city: 'Bengaluru',
+    phone: '+91 90000 11111',
+  });
+
+  const byPhone = await saveGooglePlaceAsLead({
+    place_id: 'places/save-by-phone',
+    decision: 'save',
+    business_name: 'Different Name',
+    city: 'Bengaluru',
+    phone: '+91 90000 11111',
+  });
+  assert.equal(byPhone.created, false);
+  assert.equal(byPhone.lead.id, existing.id);
+
+  await saveGooglePlaceAsLead({
+    place_id: 'places/save-name-1',
+    decision: 'save',
+    business_name: 'Name Match Restaurant',
+    city: 'Bengaluru',
+  });
+  const byName = await saveGooglePlaceAsLead({
+    place_id: 'places/save-name-2',
+    decision: 'save',
+    business_name: 'Name Match Restaurant',
+    city: 'Bengaluru',
+  });
+  assert.equal(byName.created, false);
+});
+
+test('outreach-ready requires verified AND approved AND not suppressed', () => {
+  const lead = createLead({
+    business_name: 'Approval Gate Cafe',
+    phone: '+91 90000 22222',
+    business_cat: 'Cafés and coffee shops',
+    city: 'Bengaluru',
+    address: 'Indiranagar',
+    website: 'approval.example',
+  });
+
+  assert.equal(checkLeadOutreach(lead.id).allowed, false);
+  assert.equal(checkLeadOutreach(lead.id).reason, 'not_verified');
+  assert.ok(!listOutreachReadyLeads().some((row) => row.id === lead.id));
+
+  updateLead(lead.id, { verification_status: 'verified' });
+  assert.equal(checkLeadOutreach(lead.id).reason, 'not_approved_for_outreach');
+  assert.ok(!listOutreachReadyLeads().some((row) => row.id === lead.id));
+
+  updateLead(lead.id, { approved_for_outreach: true, approved_by: 'Reviewer' });
+  assert.equal(checkLeadOutreach(lead.id).allowed, true);
+  assert.ok(listOutreachReadyLeads().some((row) => row.id === lead.id));
 });

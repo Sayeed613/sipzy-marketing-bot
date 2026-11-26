@@ -47,6 +47,13 @@ function toLead(input, createdAt = new Date().toISOString()) {
     verification_notes: data.verification_notes || '',
     last_verified_at: data.last_verified_at || null,
     verified_by: data.verified_by || '',
+    place_id: data.place_id || '',
+    approved_for_outreach: data.approved_for_outreach ? 1 : 0,
+    approved_by: data.approved_by || '',
+    approved_at: data.approved_at || (data.approved_for_outreach ? createdAt : null),
+    whatsapp_opt_in: data.whatsapp_opt_in ? 1 : 0,
+    whatsapp_permission_source: data.whatsapp_permission_source || '',
+    whatsapp_opt_in_at: data.whatsapp_opt_in_at || null,
     created_at: data.created_at || createdAt,
   };
 }
@@ -65,8 +72,10 @@ function upsertLead(input) {
        address, website, lead_source, permission_notes, outreach_status,
        lead_qualification, verification_status, website_verified, phone_verified,
        address_verified, business_active, verification_source, verification_notes,
-       last_verified_at, verified_by, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       last_verified_at, verified_by, place_id, approved_for_outreach,
+       approved_by, approved_at, whatsapp_opt_in, whatsapp_permission_source,
+       whatsapp_opt_in_at, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   stmt.run(
     lead.id,
@@ -91,6 +100,13 @@ function upsertLead(input) {
     lead.verification_notes,
     lead.last_verified_at,
     lead.verified_by,
+    lead.place_id,
+    lead.approved_for_outreach,
+    lead.approved_by,
+    lead.approved_at,
+    lead.whatsapp_opt_in,
+    lead.whatsapp_permission_source,
+    lead.whatsapp_opt_in_at,
     lead.created_at,
   );
 
@@ -110,8 +126,10 @@ function createLead(input) {
        address, website, lead_source, permission_notes, outreach_status,
        lead_qualification, verification_status, website_verified, phone_verified,
        address_verified, business_active, verification_source, verification_notes,
-       last_verified_at, verified_by, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       last_verified_at, verified_by, place_id, approved_for_outreach,
+       approved_by, approved_at, whatsapp_opt_in, whatsapp_permission_source,
+       whatsapp_opt_in_at, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     lead.id,
     lead.business_name,
@@ -135,6 +153,13 @@ function createLead(input) {
     lead.verification_notes,
     lead.last_verified_at,
     lead.verified_by,
+    lead.place_id,
+    lead.approved_for_outreach,
+    lead.approved_by,
+    lead.approved_at,
+    lead.whatsapp_opt_in,
+    lead.whatsapp_permission_source,
+    lead.whatsapp_opt_in_at,
     lead.created_at,
   );
   if (info.changes === 0) {
@@ -173,7 +198,7 @@ function validateLead(input) {
   // email - must look like an email
   if (input !== undefined && input !== null && input.email !== undefined && input.email !== null) {
     const email = String(input.email).trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       errors.push({ field: 'email', message: 'Email must be a valid email address' });
     }
     data.email = email;
@@ -284,6 +309,52 @@ function validateLead(input) {
     data.last_verified_at = String(input.last_verified_at).trim();
   }
 
+  // place_id (Google Places identifier; other Google fields remain review-only)
+  if (input !== undefined && input !== null && input.place_id !== undefined && input.place_id !== null) {
+    data.place_id = String(input.place_id).trim();
+  }
+
+  // approval for outreach
+  if (input !== undefined && input !== null && input.approved_for_outreach !== undefined && input.approved_for_outreach !== null && input.approved_for_outreach !== '') {
+    const value = input.approved_for_outreach;
+    if (value === true || value === 1 || value === '1' || value === 'true' || value === 'yes' || value === 'on') {
+      data.approved_for_outreach = 1;
+    } else if (value === false || value === 0 || value === '0' || value === 'false' || value === 'no' || value === 'off') {
+      data.approved_for_outreach = 0;
+    } else {
+      errors.push({ field: 'approved_for_outreach', message: 'approved_for_outreach must be true or false' });
+    }
+  }
+
+  if (input !== undefined && input !== null && input.approved_by !== undefined && input.approved_by !== null) {
+    data.approved_by = String(input.approved_by).trim();
+  }
+
+  if (input !== undefined && input !== null && input.approved_at !== undefined && input.approved_at !== null && input.approved_at !== '') {
+    data.approved_at = String(input.approved_at).trim();
+  }
+
+  // WhatsApp opt-in / permission basis. Accept common aliases for compatibility.
+  const optInAliases = ['whatsapp_opt_in', 'whatsapp_permission', 'whatsapp_consent', 'opt_in', 'consent'];
+  for (const alias of optInAliases) {
+    if (input !== undefined && input !== null && input[alias] !== undefined && input[alias] !== null && input[alias] !== '') {
+      const value = input[alias];
+      if (value === true || value === 1 || value === '1' || value === 'true' || value === 'yes' || value === 'on') {
+        data.whatsapp_opt_in = 1;
+      } else if (value === false || value === 0 || value === '0' || value === 'false' || value === 'no' || value === 'off') {
+        data.whatsapp_opt_in = 0;
+      }
+    }
+  }
+  for (const field of ['whatsapp_permission_source', 'permission_basis']) {
+    if (input !== undefined && input !== null && input[field] !== undefined && input[field] !== null) {
+      data.whatsapp_permission_source = String(input[field]).trim();
+    }
+  }
+  if (input !== undefined && input !== null && input.whatsapp_opt_in_at !== undefined && input.whatsapp_opt_in_at !== null && input.whatsapp_opt_in_at !== '') {
+    data.whatsapp_opt_in_at = String(input.whatsapp_opt_in_at).trim();
+  }
+
   // created_at (optional)
   if (input !== undefined && input !== null && input.created_at !== undefined && input.created_at !== null) {
     data.created_at = String(input.created_at);
@@ -380,6 +451,15 @@ function updateLead(id, patch) {
   ) {
     workingPatch.last_verified_at = new Date().toISOString();
   }
+  if (
+    (workingPatch.approved_for_outreach === true ||
+      workingPatch.approved_for_outreach === 1 ||
+      workingPatch.approved_for_outreach === 'true' ||
+      workingPatch.approved_for_outreach === '1') &&
+    workingPatch.approved_at === undefined
+  ) {
+    workingPatch.approved_at = new Date().toISOString();
+  }
   const merged = { ...existing, ...workingPatch };
   const { errors, data } = validateLead(merged);
   if (errors.length) {
@@ -408,6 +488,13 @@ function updateLead(id, patch) {
     'verification_notes',
     'last_verified_at',
     'verified_by',
+    'place_id',
+    'approved_for_outreach',
+    'approved_by',
+    'approved_at',
+    'whatsapp_opt_in',
+    'whatsapp_permission_source',
+    'whatsapp_opt_in_at',
   ];
 
   const fields = [];
@@ -665,6 +752,9 @@ function findDuplicateLeadGroups() {
   for (const lead of leads) {
     const nameCity = `${String(lead.business_name || '').trim().toLowerCase().replace(/\s+/g, ' ')}|${String(lead.city || '').trim().toLowerCase()}`;
     if (String(lead.business_name || '').trim()) addBucket(`namecity:${nameCity}`, 'same business name and city', lead);
+
+    const placeId = String(lead.place_id || '').trim();
+    if (placeId) addBucket(`place:${placeId}`, 'same Google Place ID', lead);
 
     const phone = normalizePhone(lead.phone);
     if (phone) addBucket(`phone:${phone}`, 'same phone number', lead);

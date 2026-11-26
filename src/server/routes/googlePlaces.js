@@ -3,6 +3,7 @@ import {
   getGooglePlacesConfig,
   validateSearchInput,
   searchGooglePlaces,
+  saveGooglePlaceAsLead,
 } from '../services/googlePlaces.js';
 
 const router = Router();
@@ -61,5 +62,25 @@ router.get('/config', (_req, res) => {
 // POST or GET /api/v1/google-places/search
 router.post('/search', handleSearch);
 router.get('/search', handleSearch);
+
+router.post('/save', async (req, res) => {
+  try {
+    if (!checkRateLimit(clientKey(req))) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many Google Places requests. Please wait and try again.',
+      });
+    }
+    const result = await saveGooglePlaceAsLead(req.body || {});
+    const status = result.created ? 201 : 200;
+    const data = result.lead
+      ? { ...result.lead, saved: result.saved, created: result.created, duplicate: result.duplicate, lead: result.lead }
+      : result;
+    return res.status(status).json({ success: true, data });
+  } catch (err) {
+    const status = err.status || 400;
+    return res.status(status).json({ success: false, error: err.message });
+  }
+});
 
 export default router;

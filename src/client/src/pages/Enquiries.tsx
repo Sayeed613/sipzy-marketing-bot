@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { enquiriesApi, type Enquiry, type EnquiryStatus } from '../utils/api';
+import { useAuth } from '../auth/AuthContext';
 
 const ENQUIRY_STATUSES: EnquiryStatus[] = [
   'new',
@@ -144,6 +145,8 @@ const EnquiryDetails: React.FC<{ enquiry: Enquiry; onClose: () => void }> = ({ e
 );
 
 const Enquiries: React.FC = () => {
+  const { canWrite } = useAuth();
+  const mayEdit = canWrite('enquiries');
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -307,7 +310,7 @@ const Enquiries: React.FC = () => {
               <option value="">All sizes</option>
               <option value="250ml">250ml</option>
               <option value="350ml">350ml</option>
-              <option value="500ml">500ml</option>
+              <option value="450ml">450ml</option>
             </select>
           </div>
           {hasFilters && (
@@ -386,23 +389,25 @@ const Enquiries: React.FC = () => {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span
-                          className={`hidden rounded-full border px-2.5 py-0.5 text-xs font-medium xl:inline-flex ${STATUS_BADGE[enquiry.enquiry_status]}`}
+                          className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_BADGE[enquiry.enquiry_status]} ${mayEdit ? 'hidden xl:inline-flex' : ''}`}
                         >
                           {STATUS_LABEL[enquiry.enquiry_status]}
                         </span>
-                        <select
-                          value={enquiry.enquiry_status}
-                          onChange={(event) =>
-                            handleStatusChange(enquiry, event.target.value as EnquiryStatus)
-                          }
-                          disabled={savingId === enquiry.id}
-                          aria-label={`Status for ${enquiry.customer_name || 'enquiry'}`}
-                          className="rounded-lg border border-sipzy-border bg-white px-2 py-1 text-xs font-medium text-sipzy-text focus:border-sipzy-green focus:outline-none focus:ring-2 focus:ring-sipzy-green/20 disabled:opacity-60"
-                        >
-                          {ENQUIRY_STATUSES.map((status) => (
-                            <option key={status} value={status}>{STATUS_LABEL[status]}</option>
-                          ))}
-                        </select>
+                        {mayEdit && (
+                          <select
+                            value={enquiry.enquiry_status}
+                            onChange={(event) =>
+                              handleStatusChange(enquiry, event.target.value as EnquiryStatus)
+                            }
+                            disabled={savingId === enquiry.id}
+                            aria-label={`Status for ${enquiry.customer_name || 'enquiry'}`}
+                            className="rounded-lg border border-sipzy-border bg-white px-2 py-1 text-xs font-medium text-sipzy-text focus:border-sipzy-green focus:outline-none focus:ring-2 focus:ring-sipzy-green/20 disabled:opacity-60"
+                          >
+                            {ENQUIRY_STATUSES.map((status) => (
+                              <option key={status} value={status}>{STATUS_LABEL[status]}</option>
+                            ))}
+                          </select>
+                        )}
                       </div>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-sipzy-muted">

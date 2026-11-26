@@ -182,7 +182,7 @@ const MessageAnalyzer: React.FC = () => {
         email: review.email.trim(),
         phone: review.phone.trim(),
         product_type: (review.product_type || '') as '' | 'Hot' | 'Cold',
-        cup_size: (review.cup_size || '') as '' | '250ml' | '350ml' | '500ml',
+        cup_size: (review.cup_size || '') as '' | '250ml' | '350ml' | '450ml',
         quantity,
         delivery_location: review.delivery_location.trim(),
       });
@@ -431,7 +431,7 @@ const MessageAnalyzer: React.FC = () => {
                       <option value="">Not specified</option>
                       <option value="250ml">250ml</option>
                       <option value="350ml">350ml</option>
-                      <option value="500ml">500ml</option>
+                      <option value="450ml">450ml</option>
                     </select>
                   </Field>
                   <Field label="Quantity">

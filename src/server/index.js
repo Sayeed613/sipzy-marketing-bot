@@ -1,145 +1,44 @@
-import express from 'express';
-import cors from 'cors';
 import 'dotenv/config';
-import { initDb, closeDb, DB_FILE, DATA_DIR, getDb } from './db/index.js';
-import leadsRouter from './routes/leads.js';
-import enquiriesRouter from './routes/enquiries.js';
-import productsRouter from './routes/products.js';
-import activityRouter from './routes/activity.js';
-import analyzerRouter from './routes/analyzer.js';
-import suppressionsRouter from './routes/suppressions.js';
-import googlePlacesRouter from './routes/googlePlaces.js';
-import { listLeads } from './services/leads.js';
-import { listEnquiries } from './services/enquiries.js';
+import { createApp } from './app.js';
+import { initDb, closeDb, DB_FILE } from './db/index.js';
+import { bootstrapAdminFromEnv, countUsers } from './services/auth.js';
 import { backfillFromOptOuts, migrateSuppressionPhones } from './services/suppressions.js';
-import { outreachStats } from './services/outreach.js';
+import { recoverQueue } from './services/campaigns.js';
 
 /**
  * SIPZY Marketing Bot - Backend Entry
  *
- * REST + (future) WhatsApp webhook endpoint. No external APIs wired yet:
- * - No WhatsApp SDK / WhatsApp Cloud API configured
- * - No AI / LLM client initialised
- * - No email service connected
- *
  * Database: SQLite via better-sqlite3, file stored in data/sipzy.db
  * (excluded from Git). All SQL is parameterized.
+ *
+ * Outbound WhatsApp sending, the campaign scheduler and paid AI providers
+ * remain disabled by default (DRY_RUN=true, WHATSAPP_SENDING_ENABLED=false,
+ * AI_PROVIDER=local).
  */
 
 const PORT = Number(process.env.PORT || 4000);
 
-const app = express();
+let server = null;
 
-// ---- Middleware -----
-app.use(cors()); // allow the Vite dev server origin during development
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: true, limit: '10kb' }));
-
-// ---- Mount API v1 routes ----
-app.use('/api/v1/leads', leadsRouter);
-app.use('/api/v1/enquiries', enquiriesRouter);
-app.use('/api/v1/products', productsRouter);
-app.use('/api/v1/activity', activityRouter);
-app.use('/api/v1', analyzerRouter);
-app.use('/api/v1/suppressions', suppressionsRouter);
-app.use('/api/v1/google-places', googlePlacesRouter);
-
-// ---- Health check (before DB init so it always works) ----
-app.get('/api/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    service: 'sipzy-marketing-bot',
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// ---- Synthetic health that includes DB readiness ----
-// The DB is initialised at startup (initDb()). This endpoint confirms
-// the service is up and the DB is ready.
-// NOTE: uses getDb() to run a lightweight query but does NOT close the
-// shared singleton (_db) - the services hold the same connection and
-// closing it would break them until the next request reopens it.
-app.get('/api/v1/health', async (_req, res) => {
-  try {
-    const db = getDb();
-    // Just touch the products table; discard the result.
-    db.prepare('SELECT COUNT(*) AS n FROM products').get();
-    res.json({
-      status: 'ok',
-      service: 'sipzy-marketing-bot',
-      timestamp: new Date().toISOString(),
-      db: 'ready',
-    });
-  } catch (err) {
-    res.status(503).json({
-      status: 'degraded',
-      service: 'sipzy-marketing-bot',
-      timestamp: new Date().toISOString(),
-      db: 'unavailable',
-      error: err.message,
-    });
-  }
-});
-
-// ---- Dashboard statistics endpoint ----
-app.get('/api/v1/dashboard-stats', (_req, res) => {
-  try {
-    const leads = listLeads();
-    const enquiries = listEnquiries({});
-
-    // Enquiry statuses per the SIPZY marketing definition:
-    //  - 'new'                     => new enquiry
-    //  - 'interest-requested'      => customer replied interested
-    //  - 'more-info-requested'     => more information requested
-    //  - 'quote-requested'         => quote requested
-    //  - 'quotation-sent'          => quotation sent
-    //  - 'sample-requested'        => sample requested
-    //  - 'negotiation'             => negotiation
-    //  - 'confirmed-order'         => confirmed order
-    //  - 'not-interested'          => not interested
-    //  - 'opted-out'               => customer opted out
-    const newEnquiries = enquiries.filter((e) => e.enquiry_status === 'new').length;
-    const interestedCustomers = enquiries.filter((e) => e.enquiry_status === 'interest-requested' || e.enquiry_status === 'more-info-requested').length;
-    const quoteRequests = enquiries.filter((e) => e.enquiry_status === 'quote-requested' || e.enquiry_status === 'quotation-sent' || e.enquiry_status === 'sample-requested').length;
-    const confirmedOrders = enquiries.filter((e) => e.enquiry_status === 'confirmed-order' || e.enquiry_status === 'negotiation').length;
-
-    const outreach = outreachStats();
-
-    res.json({
-      status: 'ok',
-      success: true,
-      data: {
-        totalLeads: leads.length,
-        totalEnquiries: enquiries.length,
-        newEnquiries,
-        interestedCustomers,
-        quoteRequests,
-        confirmedOrders,
-        suppressedContacts: outreach.suppressedContacts,
-        outreachReadyLeads: outreach.outreachReadyLeads,
-      },
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// ---- 404 handler for unknown API routes --------------------------
-app.use((_req, res) => {
-  res.status(404).json({ error: 'Not found', path: _req.originalUrl });
-});
-
-// ---- 500 handler for caught errors --------------------------------
-app.use((err, _req, res, _next) => {
-  console.error(err);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
-// ---- Startup -----------------------------------------------------
 async function main() {
   // initDb is idempotent; safe to run on every start.
   initDb();
   console.log(`[sipzy] database initialised at ${DB_FILE}`);
+
+  // Security foundation: create the first admin from environment variables
+  // when the users table is empty. Existing accounts are never overwritten.
+  try {
+    const bootstrapped = await bootstrapAdminFromEnv();
+    if (bootstrapped) {
+      console.log(`[sipzy] initial admin created from environment: ${bootstrapped.username}`);
+    } else if (countUsers() === 0) {
+      console.warn(
+        '[sipzy] no users exist yet. Set ADMIN_USERNAME/ADMIN_PASSWORD or run: npm run admin:create'
+      );
+    }
+  } catch (err) {
+    console.error('[sipzy] admin bootstrap failed:', err.message);
+  }
 
   // Canonicalise Indian phone numbers written by older versions. Rows that
   // would collide are left intact; matching understands both spellings.
@@ -150,6 +49,9 @@ async function main() {
     );
   }
 
+  // Recover any outreach queue rows left in 'sending' by a previous crash.
+  recoverQueue();
+
   // Honour opt-outs recorded before the suppression table existed. This
   // only inserts/merges suppression rows; enquiries and leads are untouched.
   const backfilled = backfillFromOptOuts();
@@ -159,26 +61,44 @@ async function main() {
     );
   }
 
-  app.listen(PORT, () => {
-    console.log(`[sipzy] backend listening on http://localhost:${PORT}`);
-    console.log(`[sipzy] API v1 ready at http://localhost:${PORT}/api/v1`);
-  }).on('error', (err) => {
-    console.error('[sipzy] failed to start server:', err.message);
-    process.exit(1);
-  });
+  const app = createApp();
+
+  server = app
+    .listen(PORT, () => {
+      console.log(`[sipzy] backend listening on http://localhost:${PORT}`);
+      console.log(`[sipzy] API v1 ready at http://localhost:${PORT}/api/v1`);
+    })
+    .on('error', (err) => {
+      console.error('[sipzy] failed to start server:', err.message);
+      process.exit(1);
+    });
 }
 
-main();
-
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('\n[sipzy] shutting down...');
+main().catch((err) => {
+  console.error('[sipzy] startup failed:', err.message);
   closeDb();
-  process.exit(0);
+  process.exit(1);
 });
 
-process.on('SIGTERM', () => {
-  console.log('\n[sipzy] shutting down...');
-  closeDb();
-  process.exit(0);
-});
+// Graceful shutdown: stop accepting connections, then close SQLite so WAL
+// data is checkpointed before exit.
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`\n[sipzy] shutting down (${signal})...`);
+  const finish = () => {
+    closeDb();
+    process.exit(0);
+  };
+  if (server) {
+    server.close(finish);
+    // Do not wait forever on keep-alive sockets.
+    setTimeout(finish, 5000).unref?.();
+  } else {
+    finish();
+  }
+}
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));

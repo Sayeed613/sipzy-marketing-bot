@@ -1,6 +1,6 @@
 import { getDb } from '../db/index.js';
 import { randomUUID } from 'node:crypto';
-import { registerOptOut } from './suppressions.js';
+import { registerOptOut, normalizePhone } from './suppressions.js';
 
 const db = getDb();
 
@@ -17,7 +17,7 @@ const VALID_STATUSES = [
   'opted-out',
 ];
 const VALID_PRODUCT_TYPES = ['Hot', 'Cold'];
-const VALID_CUP_SIZES = ['250ml', '350ml', '500ml'];
+const VALID_CUP_SIZES = ['250ml', '350ml', '450ml'];
 
 /**
  * Build a validated + cleaned enquiry object from raw input.
@@ -180,7 +180,7 @@ function createEnquiry(input) {
  */
 function registerSuppressionIfOptedOut(enquiry) {
   if (!enquiry || enquiry.enquiry_status !== 'opted-out') return null;
-  return registerOptOut({
+  const result = registerOptOut({
     phone: enquiry.phone,
     email: enquiry.email,
     customer_name: enquiry.customer_name,
@@ -188,6 +188,26 @@ function registerSuppressionIfOptedOut(enquiry) {
     source_message: enquiry.original_message,
     enquiry_id: enquiry.id,
   });
+
+  // Stop any pending outbound campaign follow-ups for this contact.
+  try {
+    const db2 = getDb();
+    const normalized = normalizePhone(enquiry.phone);
+    const leads = db2.prepare('SELECT id, phone FROM leads').all().filter((lead) => normalizePhone(lead.phone) === normalized);
+    const now = new Date().toISOString();
+    for (const lead of leads) {
+      db2.prepare(
+        `UPDATE outreach_queue SET delivery_status = 'cancelled', stop_reason = 'opted_out', updated_at = ? WHERE lead_id = ? AND delivery_status = 'queued'`
+      ).run(now, lead.id);
+      db2.prepare(
+        `UPDATE campaign_leads SET status = 'cancelled', eligibility_reason = 'opted_out', updated_at = ? WHERE lead_id = ?`
+      ).run(now, lead.id);
+    }
+  } catch {
+    // Campaign tables may not exist in older databases; ignore.
+  }
+
+  return result;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { getDb } from '../db/index.js';
-import { listLeads } from './leads.js';
+import { listLeads, createLead, readLead } from './leads.js';
 import {
   findSuppressionForContact,
   normalizePhone,
@@ -79,6 +79,14 @@ export function validateSearchInput(input = {}) {
     errors.push({ field: 'city', message: 'City must be 100 characters or fewer' });
   } else {
     data.city = city;
+  }
+
+  const rawArea = input.area ?? input.neighbourhood ?? input.neighborhood ?? '';
+  const area = String(rawArea ?? '').trim();
+  if (area.length > 100) {
+    errors.push({ field: 'area', message: 'Area must be 100 characters or fewer' });
+  } else {
+    data.area = area || null;
   }
 
   const rawCategory = input.category ?? input.business_category ?? 'Cafés';
@@ -169,12 +177,14 @@ export async function searchGooglePlaces(input = {}) {
 
   const startedAt = Date.now();
   const city = data.city;
+  const area = data.area;
   const category = data.category;
   const pageSize = data.page_size;
   const pageToken = data.page_token;
+  const location = area ? `${area}, ${city}` : city;
 
   const requestBody = {
-    textQuery: `${CATEGORY_QUERY[category]} in ${city}`,
+    textQuery: `${CATEGORY_QUERY[category]} in ${location}`,
     pageSize,
   };
   if (pageToken) requestBody.pageToken = pageToken;
@@ -244,6 +254,7 @@ export async function searchGooglePlaces(input = {}) {
   return {
     query: {
       city,
+      area,
       category,
       page_size: pageSize,
       page_token: pageToken,
@@ -256,11 +267,74 @@ export async function searchGooglePlaces(input = {}) {
   };
 }
 
+export async function saveGooglePlaceAsLead(input = {}) {
+  const placeId = String(input.place_id || input.placeId || '').trim();
+  if (!placeId) {
+    throw new GooglePlacesError('place_id is required', 400, 'validation_error');
+  }
+
+  const decision = String(input.decision || input.reviewer_decision || input.action || 'save')
+    .trim()
+    .toLowerCase();
+  if (!['save', 'approved', 'approve', 'accept', 'saved'].includes(decision)) {
+    return { saved: false, created: false, duplicate: false, reason: 'rejected' };
+  }
+
+  const businessName = String(input.business_name || input.businessName || input.name || '').trim();
+  if (!businessName) {
+    throw new GooglePlacesError(
+      'business_name is required. Confirm the business name from an independent source before saving.',
+      400,
+      'validation_error'
+    );
+  }
+
+  const existing = getDb().prepare('SELECT id FROM leads WHERE place_id = ?').get(placeId);
+  if (existing) {
+    return { saved: true, created: false, duplicate: true, lead: readLead(existing.id) };
+  }
+
+  const saveCity = String(input.city || '').trim();
+  const savePhone = normalizePhone(input.phone || '');
+  const duplicate = listLeads().find((lead) => {
+    const sameName =
+      saveCity !== '' &&
+      String(lead.business_name || '').trim().toLowerCase() === businessName.toLowerCase() &&
+      String(lead.city || '').trim().toLowerCase() === saveCity.toLowerCase();
+    const samePhone = savePhone !== '' && normalizePhone(lead.phone) === savePhone;
+    return sameName || samePhone;
+  });
+  if (duplicate) {
+    return { saved: true, created: false, duplicate: true, lead: duplicate };
+  }
+
+  const lead = createLead({
+    business_name: businessName,
+    business_cat: String(input.business_cat || input.business_category || input.category || '').trim(),
+    contact_person: String(input.contact_person || input.contactPerson || '').trim(),
+    email: String(input.email || '').trim(),
+    phone: String(input.phone || '').trim(),
+    city: saveCity,
+    address: String(input.address || '').trim(),
+    website: String(input.website || '').trim(),
+    lead_source: 'google_places',
+    permission_notes:
+      String(input.permission_notes || '').trim() ||
+      'Saved from Google Places after manual review',
+    verification_status: 'unverified',
+    place_id: placeId,
+    approved_for_outreach: false,
+  });
+
+  return { saved: true, created: true, duplicate: false, lead };
+}
+
 export { GooglePlacesError };
 export default {
   getGooglePlacesConfig,
   validateSearchInput,
   searchGooglePlaces,
+  saveGooglePlaceAsLead,
   GOOGLE_PLACES_CATEGORIES,
   GooglePlacesError,
 };

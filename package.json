@@ -10,7 +10,8 @@
     "server": "node src/server/index.js",
     "build": "vite build",
     "preview": "vite preview",
-    "db:init": "node src/server/db/init.js"
+    "db:init": "node src/server/db/init.js",
+    "admin:create": "node scripts/createAdmin.js"
   },
   "keywords": [],
   "author": "",
@@ -25,10 +26,12 @@
     "vite": "^8.3.8"
   },
   "dependencies": {
+    "argon2": "^0.45.2",
     "better-sqlite3": "^13.2.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.10",
     "express": "^5.3.0",
+    "nodemailer": "^10.6.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.6"

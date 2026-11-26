@@ -93,7 +93,11 @@ function listLeadsWithSuppression(filters = {}) {
  * @returns {Array}
  */
 function listOutreachReadyLeads() {
-  return listLeadsWithSuppression({ excludeSuppressed: true });
+  return listLeadsWithSuppression({ excludeSuppressed: true }).filter((lead) => {
+    if (lead.verification_status !== 'verified') return false;
+    const approved = lead.approved_for_outreach === true || lead.approved_for_outreach === 1 || lead.approved_for_outreach === '1';
+    return approved;
+  });
 }
 
 /**
@@ -110,6 +114,24 @@ function checkLeadOutreach(leadId) {
     email: lead.email,
     lead_id: lead.id,
   });
+
+  if (!result.allowed) return { lead, ...result };
+  if (lead.verification_status !== 'verified') {
+    return { lead, ...result, allowed: false, reason: 'not_verified' };
+  }
+  const approved = lead.approved_for_outreach === true || lead.approved_for_outreach === 1 || lead.approved_for_outreach === '1';
+  if (!approved) {
+    return { lead, ...result, allowed: false, reason: 'not_approved_for_outreach' };
+  }
+
+  // WhatsApp promotional outreach requires explicit opt-in.
+  const whatsappOptedIn =
+    lead.whatsapp_opt_in === true ||
+    lead.whatsapp_opt_in === 1 ||
+    lead.whatsapp_opt_in === '1';
+  if (!whatsappOptedIn) {
+    return { lead, ...result, allowed: false, reason: 'no_whatsapp_opt_in' };
+  }
 
   return { lead, ...result };
 }

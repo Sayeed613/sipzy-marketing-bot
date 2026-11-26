@@ -61,6 +61,7 @@ export interface GooglePlaceResult {
 export interface GooglePlacesSearchResponse {
   query: {
     city: string;
+    area?: string | null;
     category: GooglePlacesCategory;
     page_size: number;
     page_token: string | null;
@@ -133,6 +134,10 @@ export interface Lead {
   permission_notes: string;
   outreach_status: 'new' | 'contacted' | 'quoted' | 'won' | 'lost';
   created_at: string;
+  place_id?: string;
+  approved_for_outreach?: boolean;
+  approved_by?: string;
+  approved_at?: string | null;
   /** List responses flag contacts that must never be approached. */
   suppressed?: boolean;
   suppression_reason?: string | null;
@@ -155,7 +160,7 @@ export type EnquiryStatus =
   | 'opted-out';           // Customer opted out
 
 export type ProductType = 'Hot' | 'Cold';
-export type CupSize = '250ml' | '350ml' | '500ml';
+export type CupSize = '250ml' | '350ml' | '450ml';
 
 export interface Enquiry {
   id: string;

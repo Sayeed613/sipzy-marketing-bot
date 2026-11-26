@@ -18,7 +18,10 @@ const inputClass =
 const GoogleLeadFinder: React.FC = () => {
   const [config, setConfig] = useState<GooglePlacesConfig | null>(null);
   const [city, setCity] = useState('Bengaluru');
+  const [area, setArea] = useState('');
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('Cafés');
+  const [savingPlaceId, setSavingPlaceId] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<GooglePlacesSearchResponse | null>(null);
@@ -38,6 +41,7 @@ const GoogleLeadFinder: React.FC = () => {
     try {
       const result = await googlePlacesApi.search({
         city,
+        area: area.trim() || undefined,
         category,
         page_size: 20,
         page_token: pageToken ?? null,
@@ -60,6 +64,35 @@ const GoogleLeadFinder: React.FC = () => {
 
   const configured = config?.configured ?? false;
 
+  const savePlace = async (place: GooglePlaceResult) => {
+    if (savingPlaceId) return;
+    setSavingPlaceId(place.place_id);
+    setSaveMessage(null);
+    setError(null);
+    try {
+      const result = await googlePlacesApi.save({
+        place_id: place.place_id,
+        decision: 'save',
+        business_name: place.name,
+        business_cat: '',
+        city,
+        permission_notes:
+          'Saved from Google Places review. Only place_id is retained as Google data; other fields must be verified independently.',
+      });
+      if (result.created) {
+        setSaveMessage(`Saved "${place.name}" as an unverified lead. Verify it before any outreach.`);
+      } else if (result.duplicate) {
+        setSaveMessage(`"${place.name}" is already in the CRM (duplicate Place ID).`);
+      } else {
+        setSaveMessage(`"${place.name}" was not saved.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save lead');
+    } finally {
+      setSavingPlaceId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -79,7 +112,7 @@ const GoogleLeadFinder: React.FC = () => {
       )}
 
       <div className="rounded-xl border border-sipzy-border bg-white p-4 shadow-sm">
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-4">
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-sipzy-muted" htmlFor="glf-city">
               City
@@ -90,6 +123,18 @@ const GoogleLeadFinder: React.FC = () => {
               value={city}
               onChange={(event) => setCity(event.target.value)}
               placeholder="Bengaluru"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-sipzy-muted" htmlFor="glf-area">
+              Area (optional)
+            </label>
+            <input
+              id="glf-area"
+              className={inputClass}
+              value={area}
+              onChange={(event) => setArea(event.target.value)}
+              placeholder="Indiranagar, Koramangala, HSR..."
             />
           </div>
           <div>
@@ -121,6 +166,7 @@ const GoogleLeadFinder: React.FC = () => {
           </div>
         </div>
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+        {saveMessage && <p className="mt-3 text-sm text-sipzy-green">{saveMessage}</p>}
       </div>
 
       {data && (
@@ -163,6 +209,19 @@ const GoogleLeadFinder: React.FC = () => {
                       Suppressed contact
                     </span>
                   )}
+                  {place.crm_matches.existing_lead_ids.length > 0 && (
+                    <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-medium text-amber-800">
+                      Duplicate candidate
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    disabled={savingPlaceId === place.place_id}
+                    onClick={() => savePlace(place)}
+                    className="rounded-lg bg-sipzy-green px-3 py-1 text-xs font-medium text-white hover:bg-sipzy-green-hover disabled:opacity-50"
+                  >
+                    {savingPlaceId === place.place_id ? 'Saving…' : 'Review → Save as lead'}
+                  </button>
                   <button
                     type="button"
                     className="rounded-lg border border-sipzy-border px-3 py-1 text-xs font-medium text-sipzy-text hover:bg-sipzy-hover"
@@ -221,6 +280,14 @@ const GoogleLeadFinder: React.FC = () => {
                 <h3 className="text-xl font-bold text-sipzy-text">{selected.name}</h3>
                 <p className="text-sm text-sipzy-muted">{selected.category}</p>
               </div>
+              <button
+                type="button"
+                disabled={savingPlaceId === selected.place_id}
+                onClick={() => savePlace(selected)}
+                className="rounded-lg bg-sipzy-green px-3 py-1 text-sm font-medium text-white hover:bg-sipzy-green-hover disabled:opacity-50"
+              >
+                {savingPlaceId === selected.place_id ? 'Saving…' : 'Save as lead'}
+              </button>
               <button
                 type="button"
                 onClick={() => setSelected(null)}

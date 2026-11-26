@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
 import { leadsApi, type Lead, type OutreachStatus } from '../utils/api';
 import { BUSINESS_CATEGORIES, LEAD_QUALIFICATIONS } from '../../../shared/types';
 
@@ -37,6 +38,8 @@ const EMPTY_FORM = {
   verification_notes: '',
   verified_by: '',
   last_verified_at: '',
+  approved_for_outreach: false,
+  approved_by: '',
   contact_person: '',
   email: '',
   phone: '',
@@ -82,6 +85,8 @@ const LeadForm: React.FC<LeadFormProps> = ({ initial, onCancel, onSaved }) => {
           verification_notes: initial.verification_notes || '',
           verified_by: initial.verified_by || '',
           last_verified_at: initial.last_verified_at || '',
+          approved_for_outreach: Boolean(initial.approved_for_outreach),
+          approved_by: initial.approved_by || '',
           contact_person: initial.contact_person,
           email: initial.email,
           phone: initial.phone,
@@ -365,6 +370,25 @@ const LeadForm: React.FC<LeadFormProps> = ({ initial, onCancel, onSaved }) => {
                   placeholder="Reviewer name"
                 />
               </div>
+              <label className="flex items-center gap-2 text-sm text-sipzy-text">
+                <input
+                  type="checkbox"
+                  checked={form.approved_for_outreach}
+                  onChange={(event) => set('approved_for_outreach', event.target.checked)}
+                />
+                Approved for outreach
+              </label>
+              <div>
+                <label className={labelClass} htmlFor="lead-approved-by">Approved by</label>
+                <input
+                  id="lead-approved-by"
+                  className={inputClass}
+                  value={form.approved_by}
+                  onChange={(event) => set('approved_by', event.target.value)}
+                  placeholder="Approver name"
+                  disabled={!form.approved_for_outreach}
+                />
+              </div>
               <div className="sm:col-span-2">
                 <label className={labelClass} htmlFor="lead-verification-notes">Verification notes</label>
                 <textarea
@@ -450,6 +474,8 @@ const DetailField: React.FC<{ label: string; value?: string | null }> = ({ label
 );
 
 const Leads: React.FC = () => {
+  const { canWrite } = useAuth();
+  const mayEdit = canWrite('leads');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [duplicateIds, setDuplicateIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -585,14 +611,16 @@ const Leads: React.FC = () => {
             className="hidden"
             onChange={handleImportFile}
           />
-          <button
-            type="button"
-            onClick={() => importInputRef.current?.click()}
-            disabled={importing}
-            className="inline-flex items-center gap-2 rounded-lg border border-sipzy-border px-4 py-2 text-sm font-medium text-sipzy-text transition hover:bg-sipzy-hover disabled:opacity-60"
-          >
-            {importing ? 'Importing…' : 'Import CSV'}
-          </button>
+          {mayEdit && (
+            <button
+              type="button"
+              onClick={() => importInputRef.current?.click()}
+              disabled={importing}
+              className="inline-flex items-center gap-2 rounded-lg border border-sipzy-border px-4 py-2 text-sm font-medium text-sipzy-text transition hover:bg-sipzy-hover disabled:opacity-60"
+            >
+              {importing ? 'Importing…' : 'Import CSV'}
+            </button>
+          )}
           <button
             type="button"
             onClick={handleExport}
@@ -600,19 +628,21 @@ const Leads: React.FC = () => {
           >
             Export CSV
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEditing(null);
-              setFormOpen(true);
-            }}
-            className="inline-flex items-center gap-2 rounded-lg bg-sipzy-green px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-sipzy-green-hover"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add lead
-          </button>
+          {mayEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(null);
+                setFormOpen(true);
+              }}
+              className="inline-flex items-center gap-2 rounded-lg bg-sipzy-green px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-sipzy-green-hover"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add lead
+            </button>
+          )}
         </div>
       </div>
 
@@ -835,6 +865,15 @@ const Leads: React.FC = () => {
                       <span className="mt-1 block w-fit rounded-full bg-sipzy-muted/10 px-2.5 py-0.5 text-[10px] font-medium text-sipzy-muted">
                         {lead.verification_status?.replace('_', ' ') || 'unverified'}
                       </span>
+                      {lead.approved_for_outreach ? (
+                        <span className="mt-1 block w-fit rounded-full bg-sipzy-green/10 px-2.5 py-0.5 text-[10px] font-medium text-sipzy-green">
+                          Approved
+                        </span>
+                      ) : (
+                        <span className="mt-1 block w-fit rounded-full bg-sipzy-amber/10 px-2.5 py-0.5 text-[10px] font-medium text-sipzy-amber">
+                          Not approved
+                        </span>
+                      )}
                       {lead.suppressed && (
                         <span
                           className="mt-1 block w-fit rounded-full bg-sipzy-red/10 px-2.5 py-0.5 text-xs font-medium text-sipzy-red"
@@ -856,23 +895,27 @@ const Leads: React.FC = () => {
                         >
                           View
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditing(lead);
-                            setFormOpen(true);
-                          }}
-                          className="text-sipzy-green hover:underline"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(lead)}
-                          className="text-sipzy-red hover:underline"
-                        >
-                          Delete
-                        </button>
+                        {mayEdit && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditing(lead);
+                                setFormOpen(true);
+                              }}
+                              className="text-sipzy-green hover:underline"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(lead)}
+                              className="text-sipzy-red hover:underline"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

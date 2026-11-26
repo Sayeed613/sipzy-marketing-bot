@@ -7,7 +7,7 @@ import { analyzeMessage, buildEnquiryFromAnalysis } from '../services/analyzer.j
  * Each case documents what the rule-based parser should and should not extract.
  */
 
-const VALID_SIZES = ['250ml', '350ml', '500ml'];
+const VALID_SIZES = ['250ml', '350ml', '450ml'];
 
 const cases = [
   {
@@ -109,12 +109,12 @@ const cases = [
   {
     name: 'comma quantity plus name, business and city',
     message:
-      'Hi, my name is Omar from Sunrise Bakery. Need 2,500 cold cups 500ml, delivery to Chicago.',
+      'Hi, my name is Omar from Sunrise Bakery. Need 2,500 cold cups 450ml, delivery to Chicago.',
     expected: {
       customer_name: 'Omar',
       business_name: 'Sunrise Bakery',
       product_type: 'Cold',
-      cup_size: '500ml',
+      cup_size: '450ml',
       quantity: 2500,
       delivery_location: 'Chicago',
       intent: 'interested',
@@ -316,18 +316,18 @@ test('buildEnquiryFromAnalysis: reviewer values override the parser', () => {
   const { errors, data } = buildEnquiryFromAnalysis(analysis, {
     customer_name: 'Reviewed Name',
     quantity: 7500,
-    cup_size: '500ml',
+    cup_size: '450ml',
   });
 
   assert.deepEqual(errors, []);
   assert.equal(data.customer_name, 'Reviewed Name');
   assert.equal(data.quantity, 7500);
-  assert.equal(data.cup_size, '500ml');
+  assert.equal(data.cup_size, '450ml');
   assert.equal(data.original_message, analysis.original_message);
   // The saved summary must describe what was actually saved.
   assert.match(data.ai_summary, /Reviewed Name/);
   assert.match(data.ai_summary, /7,500/);
-  assert.match(data.ai_summary, /500ml/);
+  assert.match(data.ai_summary, /450ml/);
 });
 
 test('buildEnquiryFromAnalysis: reviewer can clear a parsed field', () => {

@@ -26,6 +26,31 @@ const NAV_ITEMS = [
     icon: 'M12 3l8 4v6c0 5-3.5 8-8 8s-8-3-8-8V7l8-4zM12 8v4m0 3h.01',
   },
   {
+    to: '/sales-workflow',
+    label: 'Sales Workflow',
+    icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+  },
+  {
+    to: '/ai-conversations',
+    label: 'AI Conversations',
+    icon: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
+  },
+  {
+    to: '/campaigns',
+    label: 'Campaigns',
+    icon: 'M3 3h18v4H3V3zm0 7h18v4H3v-4zm0 7h18v4H3v-4z',
+  },
+  {
+    to: '/test-campaign',
+    label: 'Test Campaign',
+    icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+  },
+  {
+    to: '/whatsapp-inbox',
+    label: 'WhatsApp Inbox',
+    icon: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z',
+  },
+  {
     to: '/google-lead-finder',
     label: 'Google Lead Finder',
     icon: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5A2.5 2.5 0 119.5 9 2.5 2.5 0 0112 11.5z',
@@ -39,6 +64,11 @@ const NAV_ITEMS = [
     to: '/activity',
     label: 'Outreach Activity',
     icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+  },
+  {
+    to: '/outreach-composer',
+    label: 'Outreach Composer',
+    icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z',
   },
   {
     to: '/analyzer',

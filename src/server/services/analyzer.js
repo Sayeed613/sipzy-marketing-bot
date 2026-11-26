@@ -63,7 +63,7 @@ const FIELD_LABELS = {
   delivery_location: 'Delivery location',
 };
 
-const VALID_SIZES = ['250ml', '350ml', '500ml'];
+const VALID_SIZES = ['250ml', '350ml', '450ml'];
 const VALID_PRODUCT_TYPES = ['Hot', 'Cold'];
 
 // ---------------------------------------------------------------------------
@@ -236,7 +236,7 @@ function detectIntent(text) {
 
 /** 250 ml / 250ml / 250-ml / 250 millilitres */
 function extractCupSize(text) {
-  const match = text.match(/\b(250|350|500)\s*[- ]?\s*(?:ml|m\s?l|millilit(?:re|er)s?)\b/i);
+  const match = text.match(/\b(250|350|450)\s*[- ]?\s*(?:ml|m\s?l|millilit(?:re|er)s?)\b/i);
   if (!match) return null;
   const size = `${match[1]}ml`;
   return VALID_SIZES.includes(size) ? size : null;
@@ -670,7 +670,7 @@ function buildEnquiryFromAnalysis(analysis, overrides = {}) {
     errors.push('product_type must be Hot or Cold');
   }
   if (resolved.cup_size && !VALID_SIZES.includes(resolved.cup_size)) {
-    errors.push('cup_size must be 250ml, 350ml or 500ml');
+    errors.push('cup_size must be 250ml, 350ml or 450ml');
   }
   if (resolved.quantity !== null) {
     const numeric = resolved.quantity;

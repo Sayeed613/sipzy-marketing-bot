@@ -246,6 +246,8 @@ test('suppressed contacts are blocked and excluded from outreach-ready leads', (
     email: 'clean@example.com',
     phone: '+1 222 333 4444',
     outreach_status: 'new',
+    verification_status: 'verified',
+    approved_for_outreach: true,
   });
   // The same suppressed Indian contact written every way a lead might be
   // stored: none of these may slip into outreach-ready.
